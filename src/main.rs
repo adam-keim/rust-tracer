@@ -1,8 +1,10 @@
 use std::f32::INFINITY;
 
+use camera::Camera;
 use glam::Vec3A;
 use hittable::{Hittable, HittableList};
 use indicatif::ProgressBar;
+use rand::Rng;
 use ray::Ray;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use sphere::Sphere;
@@ -18,17 +20,11 @@ fn main() {
     let aspect_ratio = 16.0 / 9.0;
     let n_x: u32 = 400; //This is where we change resolution
     let n_y = (n_x as f32 / aspect_ratio) as u32;
+    let n_s: u32 = 100;
+    let max_depth = 50;
 
     // Camera Config
-    let viewport_height = 2.0;
-    let viewport_width = aspect_ratio * viewport_height;
-    let focal_length = 1.0;
-
-    let origin = Vec3A::new(0.0, 0.0, 0.0);
-    let horizontal = Vec3A::new(viewport_width, 0.0, 0.0);
-    let vertical = Vec3A::new(0.0, viewport_height, 0.0);
-    let lower_left_corner =
-        origin - horizontal / 2.0 - vertical / 2.0 - Vec3A::new(0.0, 0.0, focal_length);
+    let camera = Camera::new(); //Modify Camera Parameters in camera.rs
 
     // Scene Config
     let mut list = HittableList::new();
@@ -43,13 +39,17 @@ fn main() {
             let row: Vec<Vec3A> = (0..n_x)
                 .into_par_iter()
                 .map(|x| {
-                    let u = x as f32 / n_x as f32;
-                    let v = y as f32 / n_y as f32;
-                    let r = Ray::new(
-                        origin,
-                        lower_left_corner + u * horizontal + v * vertical - origin,
-                    );
-                    ray_color(&r, &list)
+                    let mut color_vector: Vec3A = Vec3A::new(0.0, 0.0, 0.0);
+                    let mut rng = rand::thread_rng();
+
+                    for _s in 0..n_s {
+                        let u: f32 = (x as f32 + rand::random::<f32>()) / n_x as f32;
+                        let v: f32 = (y as f32 + rand::random::<f32>()) / n_y as f32;
+                        let r: Ray = camera.get_ray(u, v);
+                        color_vector += ray_color(&r, &list, max_depth, &mut rng);
+                    }
+                    color_vector /= n_s as f32;
+                    color_vector
                 })
                 .collect();
             bar.inc(1);
@@ -57,15 +57,41 @@ fn main() {
         })
         .collect();
 
-    ppm::gen_ppm(scene, n_x, n_y);
+    ppm::gen_ppm(scene, n_x, n_y, n_s);
 }
 
-fn ray_color(r: &Ray, world: &HittableList) -> Vec3A {
-    if let Some(hr) = world.hit(r, 0.0, INFINITY) {
-        0.5 * (hr.norm + Vec3A::new(1.0, 1.0, 1.0))
+fn ray_color<R: Rng>(r: &Ray, world: &HittableList, depth: u32, rng: &mut R) -> Vec3A {
+    if depth <= 0 {
+        return Vec3A::new(0.0, 0.0, 0.0);
+    }
+    if let Some(hr) = world.hit(r, 0.001, INFINITY) {
+        let target: Vec3A = hr.p + hr.norm + random_unit_vector(rng);
+        0.5 * ray_color(&Ray::new(hr.p, target - hr.p), world, depth - 1, rng)
     } else {
         let unit_direction = r.direction().normalize();
         let t = 0.5 * (unit_direction.y + 1.0);
         (1.0 - t) * Vec3A::new(1.0, 1.0, 1.0) + t * Vec3A::new(0.5, 0.7, 1.0)
     }
+}
+
+fn random_in_unit_sphere<R: Rng>(rng: &mut R) -> Vec3A {
+    let mut cont: bool = true;
+    let mut p: Vec3A = Vec3A::new(0.0, 0.0, 0.0);
+    while cont {
+        p = Vec3A::new(
+            rng.gen_range(-1.0..1.0),
+            rng.gen_range(-1.0..1.0),
+            rng.gen_range(-1.0..1.0),
+        );
+
+        if p.length_squared() >= 1.0 {
+            cont = true;
+        } else {
+            cont = false;
+        }
+    }
+    return p;
+}
+fn random_unit_vector<R: Rng>(rng: &mut R) -> Vec3A {
+    random_in_unit_sphere(rng).normalize()
 }
