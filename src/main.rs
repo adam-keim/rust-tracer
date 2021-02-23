@@ -10,7 +10,7 @@ mod sphere;
 fn main() {
     //Image Config
     let aspect_ratio = 16.0 / 9.0;
-    let n_x: u32 = 1500; //This is where we change resolution
+    let n_x: u32 = 400; //This is where we change resolution
     let n_y = (n_x as f32 / aspect_ratio) as u32;
 
     // Camera Config
