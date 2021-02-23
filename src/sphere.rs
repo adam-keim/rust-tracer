@@ -8,6 +8,12 @@ pub struct Sphere {
     radius: f32,
 }
 
+impl Sphere {
+    pub fn new(center: Vec3A, radius: f32) -> Sphere {
+        Sphere { center, radius }
+    }
+}
+
 impl Hittable for Sphere {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRecord> {
         let oc: Vec3A = ray.origin() - self.center;
@@ -17,7 +23,18 @@ impl Hittable for Sphere {
         let disc = half_b * half_b - a * c;
         if disc >= 0.0 {
             let sqrt_disc = disc.sqrt();
-            let root = (-half_b - sqrt_disc) / a;
+            let t = (-half_b - sqrt_disc) / a;
+            if t < t_max && t > t_min {
+                let p = ray.at(t);
+                let norm = (p - self.center) / self.radius;
+                return Some(HitRecord { t, p, norm });
+            }
+            let t = (-half_b + sqrt_disc) / a;
+            if t < t_max && t > t_min {
+                let p = ray.at(t);
+                let norm = (p - self.center) / self.radius;
+                return Some(HitRecord { t, p, norm });
+            }
         }
         None
     }
