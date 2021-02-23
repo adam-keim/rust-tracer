@@ -1,12 +1,16 @@
 use glam::Vec3A;
+use indicatif::{ProgressBar, ProgressIterator};
 use ray::Ray;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+mod hittable;
+mod ppm;
 mod ray;
-
+mod sphere;
 fn main() {
     //Image Config
     let aspect_ratio = 16.0 / 9.0;
-    let n_x: u32 = 1000; //This is where we change resolution
+    let n_x: u32 = 1500; //This is where we change resolution
     let n_y = (n_x as f32 / aspect_ratio) as u32;
 
     // Camera Config
@@ -20,20 +24,42 @@ fn main() {
     let lower_left_corner =
         origin - horizontal / 2.0 - vertical / 2.0 - Vec3A::new(0.0, 0.0, focal_length);
 
-    println!("P3\n{} {}\n255", n_x, n_y);
-    for j in (0..n_y).rev() {
-        eprintln!("{}", j);
-        for i in 0..n_x {
-            let u = i as f32 / n_x as f32;
-            let v = j as f32 / n_y as f32;
-            let r = Ray::new(
-                origin,
-                lower_left_corner + u * horizontal + v * vertical - origin,
-            );
-            let pixel_color = ray_color(r);
-            write_color(pixel_color);
-        }
-    }
+    // for j in (0..n_y).rev().progress() {
+    //     for i in 0..n_x {
+    //         let u = i as f32 / n_x as f32;
+    //         let v = j as f32 / n_y as f32;
+    //         let r = Ray::new(
+    //             origin,
+    //             lower_left_corner + u * horizontal + v * vertical - origin,
+    //         );
+    //         let pixel_color = ray_color(r);
+    //         write_color(pixel_color);
+    //     }
+    // }
+
+    let bar = ProgressBar::new(n_y as u64);
+    let scene: Vec<Vec<Vec3A>> = (0..n_y)
+        .into_par_iter()
+        .map(|y_rev| {
+            let y: f32 = n_y as f32 - y_rev as f32 - 1.0;
+            let row: Vec<Vec3A> = (0..n_x)
+                .into_par_iter()
+                .map(|x| {
+                    let u = x as f32 / n_x as f32;
+                    let v = y as f32 / n_y as f32;
+                    let r = Ray::new(
+                        origin,
+                        lower_left_corner + u * horizontal + v * vertical - origin,
+                    );
+                    ray_color(r)
+                })
+                .collect();
+            bar.inc(1);
+            row
+        })
+        .collect();
+
+    ppm::gen_ppm(scene, n_x, n_y);
 }
 
 fn ray_color(r: Ray) -> Vec3A {
